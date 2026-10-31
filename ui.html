@@ -70,6 +70,7 @@
     <button class="tab" data-tab="timing">定时</button>
     <button class="tab" data-tab="token">Token</button>
     <button class="tab" data-tab="course">评课程</button>
+    <button class="tab" data-tab="channel">评课渠道</button>
     <button class="tab" data-tab="adv">高级</button>
     <button class="tab" data-tab="log">日志</button>
   </div>
@@ -132,12 +133,51 @@
   <div class="panel" id="p-course">
     <section>
       <h2>期末评课程（整学期一次）</h2>
-      <div class="hint">会把「评课程」里所有未评价的课逐门打满五星、按常规选项作答并提交。提交后不可撤销。</div>
+      <div class="hint">手动触发，评价本学期所有课程。同一时间只允许跑一个任务。</div>
       <div class="row">
-        <button class="primary" id="btn-course">评价本学期课程</button>
+        <button class="primary" id="btn-course">立即执行评课程</button>
         <button class="ghost" id="btn-course-dry">试运行（不提交）</button>
       </div>
       <div class="status" id="st-course"></div>
+    </section>
+  </div>
+
+  <div class="panel" id="p-channel">
+    <section>
+      <h2>评课渠道</h2>
+      <div class="hint">主渠道用 wjiaowu（微信 Token 浮窗登录，无需密码）；zhjw 需统一身份认证账号密码 + 验证码，作为备选。</div>
+        <div class="grid">
+        <label>评课途径</label><div>
+          <select id="f-channel">
+            <option value="wjiaowu">wjiaowu（微信 Token，推荐）</option>
+            <option value="zhjw">zhjw（账号密码 + 验证码）</option>
+            <option value="auto">自动切换（优先 wjiaowu，失败自动尝试 zhjw）</option>
+          </select>
+        </div>
+        <label>最大尝试次数</label><div><input type="number" id="f-zhjwMaxAttempts" min="1" max="10" value="3" /></div>
+        <label>失败重试间隔（分钟）</label><div><input type="number" id="f-zhjwRetryDelayMinutes" min="1" max="120" value="15" /></div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label>统一身份认证账号</label><div style="flex:1"><input type="text" id="f-zhjwAccount" placeholder="学号/工号" /></div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label>统一身份认证密码</label><div style="flex:1"><input type="text" id="f-zhjwPassword" placeholder="密码（仅本地保存）" /></div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label>登录方式</label><div style="flex:1">
+          <select id="f-zhjwMode">
+            <option value="browser">浏览器键鼠模拟（推荐，真实指纹）</option>
+            <option value="http">纯 HTTP 请求（快，但指纹较弱）</option>
+          </select>
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px"><button class="primary" id="btn-save-channel">保存渠道配置</button></div>
+      <div class="row" style="margin-top:8px">
+        <button class="primary" id="btn-zhjw-run">立即执行 zhjw 评课</button>
+        <button class="ghost" id="btn-zhjw-dry">试运行（不提交）</button>
+        <button class="ghost" id="btn-zhjw-http">纯 HTTP 模式试运行</button>
+      </div>
+      <div class="status" id="st-channel"></div>
     </section>
   </div>
 
@@ -201,8 +241,16 @@ async function refresh() {
   $("f-fillSuggestion").checked = c.fillSuggestion !== false;
   $("f-suggestion").value = c.suggestion || "";
 
+  // zhjw 渠道配置
+  $("f-channel").value = c.channel || "wjiaowu";
+  $("f-zhjwMaxAttempts").value = c.zhjwMaxAttempts ?? 3;
+  $("f-zhjwRetryDelayMinutes").value = c.zhjwRetryDelayMinutes ?? 15;
+  $("f-zhjwAccount").value = c.zhjwAccount || "";
+  $("f-zhjwPassword").value = c.zhjwPassword || "";
+  $("f-zhjwMode").value = c.zhjwMode || "browser";
+
   const busy = !!state.running;
-  ["btn-run", "btn-run-dry", "btn-course", "btn-course-dry", "btn-token-refresh", "btn-token-scan"].forEach((id) => {
+  ["btn-run", "btn-run-dry", "btn-course", "btn-course-dry", "btn-token-refresh", "btn-token-scan", "btn-zhjw-run", "btn-zhjw-dry", "btn-zhjw-http"].forEach((id) => {
     $(id).disabled = busy;
   });
   if (busy) {
@@ -254,6 +302,54 @@ bind("btn-course-dry", async () => {
   setStatus("st-course", (r.ok ? "✅ " : "❌ ") + ((r.data && (r.data.output || r.data.error)) || ""), r.ok ? "ok" : "bad");
   refresh();
 });
+bind("btn-zhjw-run", async () => {
+  setStatus("st-channel", "zhjw 评课已开始，可能几分钟…", "warn");
+  const r = await api("/api/zhjw/run", { dryRun: false });
+  setStatus("st-channel", (r.ok ? "✅ " : "❌ ") + ((r.data && (r.data.message || r.data.error)) || ""), r.ok ? "ok" : "bad");
+  refresh();
+});
+bind("btn-zhjw-dry", async () => {
+  setStatus("st-channel", "zhjw 试运行中（浏览器键鼠模拟）…", "warn");
+  const r = await api("/api/zhjw/run", { dryRun: true });
+  setStatus("st-channel", (r.ok ? "✅ " : "❌ ") + ((r.data && (r.data.message || r.data.error)) || ""), r.ok ? "ok" : "bad");
+  refresh();
+});
+bind("btn-zhjw-http", async () => {
+  setStatus("st-channel", "zhjw 纯 HTTP 模式试运行中…", "warn");
+  const r = await api("/api/zhjw/run", { dryRun: true, http: true });
+  setStatus("st-channel", (r.ok ? "✅ " : "❌ ") + ((r.data && (r.data.message || r.data.error)) || ""), r.ok ? "ok" : "bad");
+  refresh();
+});
+bind("btn-save-channel", async () => {
+  const r = await api("/api/config", {
+    patch: {
+      channel: $("f-channel").value,
+      zhjwMaxAttempts: Number($("f-zhjwMaxAttempts").value),
+      zhjwRetryDelayMinutes: Number($("f-zhjwRetryDelayMinutes").value),
+      zhjwAccount: $("f-zhjwAccount").value,
+      zhjwPassword: $("f-zhjwPassword").value,
+      zhjwMode: $("f-zhjwMode").value,
+    },
+  });
+  setStatus("st-channel", r.ok ? "✅ 已保存" : "❌ 保存失败", r.ok ? "ok" : "bad");
+  refresh();
+});
+
+// 下拉列表选了就自动保存，不用点保存按钮
+const autosaveChannelFields = () => {
+  const ch = $("f-channel");
+  const mode = $("f-zhjwMode");
+  const patch = {};
+  if (ch) patch.channel = ch.value;
+  if (mode) patch.zhjwMode = mode.value;
+  if (Object.keys(patch).length) {
+    api("/api/config", { patch }).then((r) => {
+      setStatus("st-channel", r.ok ? "✅ 已保存" : "❌ 保存失败", r.ok ? "ok" : "bad");
+    });
+  }
+};
+$("f-channel").addEventListener("change", autosaveChannelFields);
+$("f-zhjwMode").addEventListener("change", autosaveChannelFields);
 bind("btn-token-refresh", async () => {
   setStatus("st-token", "正在操作微信窗口，请别动鼠标…", "warn");
   const r = await api("/api/token/refresh", {});

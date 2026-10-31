@@ -148,12 +148,14 @@ async function taskStatus() {
 }
 
 function writeTaskWrapper() {
+  // 统一走 dispatch.mjs：它运行时读当前 channel 再分派，
+  // 所以用户改了「评课途径」不需要重新注册计划任务，下次触发自动生效。
   const cmdPath = path.join(DATA_DIR, "standalone-run.cmd");
   const body = [
     "@echo off",
     "chcp 65001 >nul",
     `cd /d "${HERE}"`,
-    `"${NODE_EXE}" "${path.join(HERE, "run-once.mjs")}" --jitter >> "${RUN_LOG}" 2>&1`,
+    `"${NODE_EXE}" "${path.join(HERE, "dispatch.mjs")}" --jitter >> "${RUN_LOG}" 2>&1`,
     "",
   ].join("\r\n");
   fs.writeFileSync(cmdPath, body, "utf8");
@@ -233,13 +235,34 @@ const server = http.createServer(async (req, res) => {
 
   if (p === "/api/run" && req.method === "POST") {
     const body = await readBody(req);
-    const result = await runNodeScript("run-once.mjs", body.dryRun ? ["--dry-run"] : [], "eval");
-    return json(res, 200, { ok: result.ok, data: result });
+    const config = readConfig();
+    // 根据评课途径自动分派：zhjw 走 run-zhjw.mjs，wjiaowu/auto 走 run-once.mjs
+    const isZhjw = String(config.channel || "wjiaowu") === "zhjw";
+    const script = isZhjw ? "run-zhjw.mjs" : "run-once.mjs";
+    const extra = [];
+    if (body.dryRun) extra.push("--dry-run");
+    if (isZhjw && body.http === true) extra.push("--http");
+    const result = await runNodeScript(script, extra, "eval");
+    return json(res, 200, { ok: result.ok, data: { ...result, source: isZhjw ? "zhjw" : "wjiaowu" } });
   }
 
   if (p === "/api/course" && req.method === "POST") {
     const body = await readBody(req);
     const result = await runNodeScript("run-course.mjs", body.dryRun ? ["--dry-run"] : [], "course");
+    return json(res, 200, { ok: result.ok, data: result });
+  }
+
+  if (p === "/api/zhjw/run" && req.method === "POST") {
+    const body = await readBody(req);
+    const extra = [];
+    if (body.dryRun) extra.push("--dry-run");
+    if (body.http === true) extra.push("--http");
+    const result = await runNodeScript("run-zhjw.mjs", extra, "zhjw");
+    return json(res, 200, { ok: result.ok, data: result });
+  }
+
+  if (p === "/api/zhjw/check" && req.method === "POST") {
+    const result = await runNodeScript("run-zhjw.mjs", ["--check"], "zhjw-check");
     return json(res, 200, { ok: result.ok, data: result });
   }
 

@@ -1,0 +1,2 @@
+allowBuilds:
+  onnxruntime@1.7.0: true

@@ -11,6 +11,14 @@ server.log
 ui-preview.png
 app.ico.bak
 
+# 本地配置（含账号密码/token，绝不入库）
+config.json
+config.local.json
+
+# Python
+__pycache__/
+*.pyc
+
 # 系统
 Thumbs.db
 .DS_Store
