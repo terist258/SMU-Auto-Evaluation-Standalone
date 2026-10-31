@@ -1,0 +1,16 @@
+# 运行时与依赖（发布时用 Release 附件分发，不入库）
+node/
+node_modules/
+
+# 本地产物
+*.log
+last-run.json
+last-course-run.json
+runs.jsonl
+server.log
+ui-preview.png
+app.ico.bak
+
+# 系统
+Thumbs.db
+.DS_Store

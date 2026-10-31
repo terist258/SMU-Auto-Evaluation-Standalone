@@ -1,0 +1,14 @@
+{
+  "name": "smueval-bot-standalone",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "南方医科大学随堂评价自动完成（独立版，不依赖 DSH）",
+  "scripts": {
+    "start": "node server.mjs",
+    "eval": "node run-once.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "*"
+  }
+}

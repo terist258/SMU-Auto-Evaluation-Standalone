@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>南医大评课助手 · 独立版</title>
+<style>
+  :root {
+    --bg: #f6f7f8; --card: #ffffff; --text: #1f2328; --sub: #6b7280; --faint: #9ca3af;
+    --border: #e5e7eb; --border2: #d1d5db; --ok: #067647; --warn: #b54708; --bad: #b42318;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115; --card: #171a21; --text: #e6e8eb; --sub: #9aa3af; --faint: #6b7280;
+      --border: #262b33; --border2: #363c47; --ok: #3ccb7f; --warn: #f79009; --bad: #f97066;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 18px 20px 40px; background: var(--bg); color: var(--text);
+    font: 13px/1.6 "Microsoft YaHei UI", "Segoe UI", system-ui, sans-serif;
+  }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  .sub { color: var(--sub); font-size: 12px; margin-bottom: 14px; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .tab {
+    padding: 5px 14px; font-size: 12px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--border2); background: transparent; color: var(--sub);
+  }
+  .tab.active { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  section {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 10px;
+  }
+  section h2 { font-size: 13px; margin: 0 0 4px; }
+  section .hint { color: var(--faint); font-size: 12px; margin-bottom: 8px; }
+  .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  button.primary, button.ghost {
+    padding: 6px 16px; font-size: 13px; border-radius: 6px; cursor: pointer;
+  }
+  button.primary { background: var(--text); color: var(--bg); border: 1px solid var(--text); font-weight: 600; }
+  button.ghost { background: transparent; color: var(--sub); border: 1px solid var(--border2); }
+  button:disabled { opacity: .5; cursor: default; }
+  .status { color: var(--sub); font-size: 12px; margin-top: 8px; white-space: pre-wrap; }
+  .grid { display: grid; grid-template-columns: 150px 1fr; gap: 8px 12px; align-items: center; }
+  .grid label { color: var(--sub); font-size: 12px; }
+  input[type=text], input[type=number], select {
+    width: 100%; padding: 5px 8px; font-size: 13px; border-radius: 6px;
+    border: 1px solid var(--border2); background: transparent; color: var(--text);
+    color-scheme: light dark;
+  }
+  input[type=checkbox] { accent-color: var(--text); }
+  .kbd { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+  pre.log {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px; max-height: 320px; overflow: auto; font-size: 12px;
+    font-family: ui-monospace, Consolas, monospace; white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+  <h1>南医大评课助手 · 独立版</h1>
+  <div class="sub">不依赖 DSH，自带 Node 与浏览器自动化。配置与 DSH 插件共用 <span class="kbd" id="dataDir">…</span><button class="ghost" id="btn-quit" style="margin-left:10px;padding:2px 10px;font-size:12px">退出程序</button></div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="op">操作</button>
+    <button class="tab" data-tab="timing">定时</button>
+    <button class="tab" data-tab="token">Token</button>
+    <button class="tab" data-tab="course">评课程</button>
+    <button class="tab" data-tab="adv">高级</button>
+    <button class="tab" data-tab="log">日志</button>
+  </div>
+
+  <div class="panel active" id="p-op">
+    <section>
+      <h2>第一次用？三步走</h2>
+      <div class="hint" style="line-height:1.9">
+        1. 到「<b>Token</b>」页签点 <b>扫描 Token</b>，看到绿色「可用」就说明登录态有了<br>
+        2. 到「<b>定时</b>」页签设好时间，点 <b>注册 Windows 计划任务</b>（之后关掉页面也会按时跑）<br>
+        3. 想马上试一次，用下面的 <b>试运行（不提交）</b>；确认没问题再点 <b>立即执行</b>
+      </div>
+    </section>
+    <section>
+      <h2>立即执行（随堂评价）</h2>
+      <div class="hint">会真的打开浏览器点页面；同一时间只允许跑一个任务。</div>
+      <div class="row">
+        <button class="primary" id="btn-run">立即执行</button>
+        <button class="ghost" id="btn-run-dry">试运行（不提交）</button>
+      </div>
+      <div class="status" id="st-run"></div>
+    </section>
+    <section>
+      <h2>最近结果</h2>
+      <div class="status" id="st-lastrun">读取中…</div>
+    </section>
+  </div>
+
+  <div class="panel" id="p-timing">
+    <section>
+      <h2>每日自动运行</h2>
+      <div class="grid">
+        <label>启用</label><div><input type="checkbox" id="f-enabled" /></div>
+        <label>运行时间</label><div><input type="text" id="f-runTimes" placeholder="20:30" /></div>
+        <label>随机浮动（分钟）</label><div><input type="number" id="f-runJitterMinutes" min="0" max="180" /></div>
+        <label>补评天数</label><div><input type="number" id="f-lookbackDays" min="0" max="7" /></div>
+        <label>四星题数</label><div><input type="number" id="f-fourStarCount" min="0" max="4" /></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="btn-save-timing">保存</button>
+        <button class="ghost" id="btn-task-install">注册 Windows 计划任务</button>
+        <button class="ghost" id="btn-task-remove">取消计划任务</button>
+      </div>
+      <div class="status" id="st-task"></div>
+    </section>
+  </div>
+
+  <div class="panel" id="p-token">
+    <section>
+      <h2>登录态（Token）</h2>
+      <div class="hint">当前：<span class="kbd" id="token-masked">—</span>。过期时可从电脑版微信的浮窗里自动换新。</div>
+      <div class="row">
+        <button class="primary" id="btn-token-refresh">用微信浮窗刷新 Token</button>
+        <button class="ghost" id="btn-token-scan">扫描 Token</button>
+      </div>
+      <div class="status" id="st-token"></div>
+    </section>
+  </div>
+
+  <div class="panel" id="p-course">
+    <section>
+      <h2>期末评课程（整学期一次）</h2>
+      <div class="hint">会把「评课程」里所有未评价的课逐门打满五星、按常规选项作答并提交。提交后不可撤销。</div>
+      <div class="row">
+        <button class="primary" id="btn-course">评价本学期课程</button>
+        <button class="ghost" id="btn-course-dry">试运行（不提交）</button>
+      </div>
+      <div class="status" id="st-course"></div>
+    </section>
+  </div>
+
+  <div class="panel" id="p-adv">
+    <section>
+      <h2>浏览器与建议</h2>
+      <div class="grid">
+        <label>显示浏览器窗口</label><div><input type="checkbox" id="f-headlessOff" /></div>
+        <label>同步本机浏览器资料</label><div><input type="checkbox" id="f-seedProfile" /></div>
+        <label>自动读取微信 Token</label><div><input type="checkbox" id="f-readWeChatToken" /></div>
+        <label>填写意见建议</label><div><input type="checkbox" id="f-fillSuggestion" /></div>
+        <label>建议文本</label><div><input type="text" id="f-suggestion" /></div>
+      </div>
+      <div class="row" style="margin-top:10px"><button class="primary" id="btn-save-adv">保存</button></div>
+      <div class="status" id="st-adv"></div>
+    </section>
+  </div>
+
+  <div class="panel" id="p-log">
+    <section>
+      <h2>运行日志</h2>
+      <div class="row"><button class="ghost" id="btn-log">刷新</button></div>
+      <pre class="log" id="logbox">（还没有日志）</pre>
+    </section>
+  </div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let state = null;
+
+async function api(path, body) {
+  const res = await fetch(path, {
+    method: body === undefined ? "GET" : "POST",
+    headers: { "content-type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  return res.json();
+}
+
+function setStatus(id, text, kind) {
+  const el = $(id);
+  el.textContent = text || "";
+  el.className = "status" + (kind ? " " + kind : "");
+}
+
+async function refresh() {
+  state = await api("/api/state");
+  $("dataDir").textContent = state.dataDir || "…";
+  $("token-masked").textContent = state.tokenMasked || "(空)";
+  const c = state.config || {};
+
+  $("f-enabled").checked = c.enabled !== false;
+  $("f-runTimes").value = Array.isArray(c.runTimes) ? c.runTimes.join(",") : "20:30";
+  $("f-runJitterMinutes").value = c.runJitterMinutes ?? 30;
+  $("f-lookbackDays").value = c.lookbackDays ?? 1;
+  $("f-fourStarCount").value = c.fourStarCount ?? 2;
+
+  $("f-headlessOff").checked = c.headless !== true;
+  $("f-seedProfile").checked = c.seedProfile !== false;
+  $("f-readWeChatToken").checked = c.readWeChatToken !== false;
+  $("f-fillSuggestion").checked = c.fillSuggestion !== false;
+  $("f-suggestion").value = c.suggestion || "";
+
+  const busy = !!state.running;
+  ["btn-run", "btn-run-dry", "btn-course", "btn-course-dry", "btn-token-refresh", "btn-token-scan"].forEach((id) => {
+    $(id).disabled = busy;
+  });
+  if (busy) {
+    setStatus("st-run", "正在执行：" + state.running + "（" + (state.startedAt || "") + "）", "warn");
+  }
+
+  const lr = state.lastRun;
+  $("st-lastrun").textContent = lr
+    ? `${lr.ok ? "✅" : "❌"} ${lr.finishedAt || ""} · ${lr.message || ""}（来源 ${lr.source || "?"}）`
+    : "还没有运行记录";
+  $("st-lastrun").className = "status " + (lr ? (lr.ok ? "ok" : "bad") : "");
+
+  const tasks = state.tasks || [];
+  $("st-task").textContent = tasks.length
+    ? tasks.map((t) => `${t.name}（${t.time}）${t.installed ? "已注册" : "未注册"}`).join("　")
+    : "";
+
+  const lc = state.lastCourse;
+  if (lc) {
+    setStatus("st-course", `${lc.ok ? "✅" : "❌"} ${lc.finishedAt || ""} · ${lc.message || ""}`, lc.ok ? "ok" : "bad");
+  }
+}
+
+function bind(id, fn) {
+  $(id).addEventListener("click", fn);
+}
+
+bind("btn-run", async () => {
+  setStatus("st-run", "已开始，稍候…", "warn");
+  const r = await api("/api/run", { dryRun: false });
+  setStatus("st-run", (r.ok ? "✅ " : "❌ ") + ((r.data && (r.data.output || r.data.error)) || ""), r.ok ? "ok" : "bad");
+  refresh();
+});
+bind("btn-run-dry", async () => {
+  setStatus("st-run", "试运行已开始，稍候…", "warn");
+  const r = await api("/api/run", { dryRun: true });
+  setStatus("st-run", (r.ok ? "✅ " : "❌ ") + ((r.data && (r.data.output || r.data.error)) || ""), r.ok ? "ok" : "bad");
+  refresh();
+});
+bind("btn-course", async () => {
+  setStatus("st-course", "已开始逐门评价，可能几分钟…", "warn");
+  const r = await api("/api/course", { dryRun: false });
+  setStatus("st-course", (r.ok ? "✅ " : "❌ ") + ((r.data && (r.data.output || r.data.error)) || ""), r.ok ? "ok" : "bad");
+  refresh();
+});
+bind("btn-course-dry", async () => {
+  setStatus("st-course", "试运行中…", "warn");
+  const r = await api("/api/course", { dryRun: true });
+  setStatus("st-course", (r.ok ? "✅ " : "❌ ") + ((r.data && (r.data.output || r.data.error)) || ""), r.ok ? "ok" : "bad");
+  refresh();
+});
+bind("btn-token-refresh", async () => {
+  setStatus("st-token", "正在操作微信窗口，请别动鼠标…", "warn");
+  const r = await api("/api/token/refresh", {});
+  const best = r.data && r.data.best;
+  setStatus("st-token", (r.ok ? "✅ " : "❌ ") + (best ? "可用 Token：" + best.masked : "没扫到有效 Token"), r.ok ? "ok" : "bad");
+  refresh();
+});
+bind("btn-token-scan", async () => {
+  setStatus("st-token", "扫描中…");
+  const r = await api("/api/token/scan", {});
+  const best = r.data && r.data.best;
+  setStatus("st-token", best ? "✅ 可用：" + best.masked : "❌ 没有有效 Token", best ? "ok" : "bad");
+});
+bind("btn-save-timing", async () => {
+  const runTimes = $("f-runTimes").value.split(/[,，\s]+/).filter(Boolean);
+  const r = await api("/api/config", {
+    patch: {
+      enabled: $("f-enabled").checked,
+      runTimes,
+      runJitterMinutes: Number($("f-runJitterMinutes").value),
+      lookbackDays: Number($("f-lookbackDays").value),
+      fourStarCount: Number($("f-fourStarCount").value),
+      varyFourStar: false,
+    },
+  });
+  setStatus("st-task", r.ok ? "✅ 已保存" : "❌ 保存失败", r.ok ? "ok" : "bad");
+  refresh();
+});
+bind("btn-save-adv", async () => {
+  const r = await api("/api/config", {
+    patch: {
+      headless: !$("f-headlessOff").checked,
+      seedProfile: $("f-seedProfile").checked,
+      readWeChatToken: $("f-readWeChatToken").checked,
+      fillSuggestion: $("f-fillSuggestion").checked,
+      suggestion: $("f-suggestion").value,
+    },
+  });
+  setStatus("st-adv", r.ok ? "✅ 已保存" : "❌ 保存失败", r.ok ? "ok" : "bad");
+  refresh();
+});
+bind("btn-task-install", async () => {
+  setStatus("st-task", "正在注册计划任务…", "warn");
+  const r = await api("/api/task", { action: "install" });
+  setStatus("st-task", (r.ok ? "✅ " : "⚠️ ") + JSON.stringify(r.data), r.ok ? "ok" : "warn");
+  refresh();
+});
+bind("btn-task-remove", async () => {
+  const r = await api("/api/task", { action: "remove" });
+  setStatus("st-task", r.ok ? "✅ 已取消" : "❌ 取消失败", r.ok ? "ok" : "bad");
+  refresh();
+});
+bind("btn-quit", async () => {
+  if (!confirm("确定退出评课助手吗？退出后自动评课会停止（Windows 计划任务不受影响，仍会按时跑）。")) return;
+  await api("/api/quit", {});
+  document.body.innerHTML = "<div style='padding:40px;font:14px/1.8 Microsoft YaHei UI'><b>已退出</b><br>服务已停止，可以关闭这个页面了。<br>下次使用请再双击「南医大评课助手.exe」。</div>";
+});
+
+bind("btn-log", async () => {
+  const r = await api("/api/log");
+  $("logbox").textContent = r.log || "（还没有日志）";
+});
+
+document.querySelectorAll(".tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+    tab.classList.add("active");
+    const id = "p-" + tab.dataset.tab;
+    const panel = $(id);
+    if (panel) panel.classList.add("active");
+    if (tab.dataset.tab === "log") $("btn-log").click();
+  });
+});
+
+refresh();
+setInterval(() => { if (state && state.running) refresh(); }, 3000);
+</script>
+</body>
+</html>
