@@ -1,5 +1,5 @@
 @echo off
 chcp 65001 >nul
 cd /d "%~dp0"
-"%~dp0node\node.exe" "%~dp0run-once.mjs" %*
+"%~dp0node\node.exe" "%~dp0dispatch.mjs" %*
 pause
