@@ -25,3 +25,8 @@ Thumbs.db
 
 # 同步脚本临时备份（勿入库）
 .sync-backup/
+# 打包产物（走 Release 附件分发，不入库）
+*.zip
+南医大评课助手_单文件*.exe
+sfx_build/
+.pkg-cache/
