@@ -106,10 +106,17 @@ function pickSuggestion(config, avoid) {
   const emptyRate = Math.max(0, Math.min(1, Number(config.suggestionEmptyRate ?? 0.35)));
   if (emptyRate > 0 && Math.random() < emptyRate) return "";
 
-  const pool =
-    Array.isArray(config.suggestionPool) && config.suggestionPool.length
-      ? config.suggestionPool
-      : SUGGESTION_POOL;
+  // 配置面板里是「每行一条」的字符串，这里统一成数组再抽
+  let pool;
+  if (Array.isArray(config.suggestionPool)) {
+    pool = config.suggestionPool.map((s) => String(s).trim()).filter(Boolean);
+  } else if (typeof config.suggestionPool === "string") {
+    pool = config.suggestionPool.split("\n").map((s) => s.trim()).filter(Boolean);
+  } else {
+    pool = [];
+  }
+  if (pool.length === 0) pool = SUGGESTION_POOL;
+
   const candidates = pool.length > 1 && avoid ? pool.filter((s) => s !== avoid) : pool;
   return candidates[rand(0, candidates.length)];
 }

@@ -1,5 +1,11 @@
 /**
- * 独立版：跑一轮随堂评价（原先的 tools/run-once.mjs，改成本地导入 + 本地脚本路径）。
+ * 脱离 DSH 跑一轮随堂评价（给 Windows 计划任务用）。
+ *
+ * 为什么单独一个脚本：计划任务只认得"命令行"，它启动时没有 DSH Host，也就没有
+ * schemastery 之类的依赖。所以这里只 import config.mjs（纯 Node，无第三方依赖）
+ * 和 browser.js（只依赖 playwright-core）。
+ *
+ * 配置读 %LOCALAPPDATA%\smueval-bot\config.json，与配置面板是同一份文件。
  *
  * 用法：
  *   node run-once.mjs              # 立刻跑一轮
@@ -8,6 +14,11 @@
  *   node run-once.mjs --check      # 只打印配置
  *   node run-once.mjs --refresh-token   # 只刷新 Token
  *   node run-once.mjs --test-notify     # 测试失败提醒
+ *
+ * 产物（都在 %LOCALAPPDATA%\smueval-bot\）：
+ *   last-run.json  最近一次结果（面板会读它显示回执）
+ *   runs.jsonl     历史记录，一行一次
+ *   run.log        计划任务模式的输出日志
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -165,7 +176,7 @@ async function main() {
     return 0;
   }
   if (String(config.mode || "browser") !== "browser") {
-    log("warn", `mode=${config.mode}，独立版只支持 browser（真实浏览器点击）`);
+    log("warn", `mode=${config.mode}，计划任务模式只支持 browser（真实浏览器点击）`);
     return 2;
   }
 
@@ -180,6 +191,7 @@ async function main() {
   const { runBrowserRun } = await import("./browser.js");
   let raw = await runBrowserRun(cfg, log);
 
+  // 计划任务模式下也要能自愈：Token 失效就自己换新的，然后补跑一次
   if (raw.tokenInvalid && !cfg.skipSubmit) {
     const fresh = await refreshTokenStandalone(cfg);
     if (fresh) {

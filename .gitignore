@@ -22,3 +22,6 @@ __pycache__/
 # 系统
 Thumbs.db
 .DS_Store
+
+# 同步脚本临时备份（勿入库）
+.sync-backup/

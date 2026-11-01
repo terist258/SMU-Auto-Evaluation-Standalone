@@ -213,7 +213,13 @@ const server = http.createServer(async (req, res) => {
     const lastCourse = readJson(LAST_COURSE_FILE);
     return json(res, 200, {
       ok: true,
-      config: { ...config, token: config.token ? "(已配置)" : "" },
+      config: {
+        ...config,
+        token: config.token ? "(已配置)" : "",
+        // 密码不回明文：只标记是否已配置，前端据此决定输入框显示
+        zhjwPasswordConfigured: !!config.zhjwPassword,
+        zhjwPassword: "",
+      },
       tokenMasked: maskToken(config.token),
       defaults: { ...DEFAULTS, token: "" },
       running: state.running,

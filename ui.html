@@ -161,7 +161,11 @@
         <label>统一身份认证账号</label><div style="flex:1"><input type="text" id="f-zhjwAccount" placeholder="学号/工号" /></div>
       </div>
       <div class="row" style="margin-top:8px">
-        <label>统一身份认证密码</label><div style="flex:1"><input type="text" id="f-zhjwPassword" placeholder="密码（仅本地保存）" /></div>
+        <label>统一身份认证密码</label>
+        <div style="flex:1;display:flex;align-items:center;gap:6px">
+          <input type="password" id="f-zhjwPassword" placeholder="留空不改密码" style="flex:1" />
+          <button type="button" id="btn-toggle-zhjwPassword" style="padding:4px 8px;font-size:12px;cursor:pointer" title="显示/隐藏密码">👁️</button>
+        </div>
       </div>
       <div class="row" style="margin-top:8px">
         <label>登录方式</label><div style="flex:1">
@@ -190,6 +194,7 @@
         <label>自动读取微信 Token</label><div><input type="checkbox" id="f-readWeChatToken" /></div>
         <label>填写意见建议</label><div><input type="checkbox" id="f-fillSuggestion" /></div>
         <label>建议文本</label><div><input type="text" id="f-suggestion" /></div>
+        <label>建议评语池</label><div><textarea id="f-suggestionPool" rows="4" placeholder="每行一条，运行时随机抽一条；留空则用上面的建议文本"></textarea></div>
       </div>
       <div class="row" style="margin-top:10px"><button class="primary" id="btn-save-adv">保存</button></div>
       <div class="status" id="st-adv"></div>
@@ -240,13 +245,22 @@ async function refresh() {
   $("f-readWeChatToken").checked = c.readWeChatToken !== false;
   $("f-fillSuggestion").checked = c.fillSuggestion !== false;
   $("f-suggestion").value = c.suggestion || "";
+  $("f-suggestionPool").value = typeof c.suggestionPool === "string"
+    ? c.suggestionPool
+    : Array.isArray(c.suggestionPool) ? c.suggestionPool.join("\n") : "";
 
   // zhjw 渠道配置
   $("f-channel").value = c.channel || "wjiaowu";
   $("f-zhjwMaxAttempts").value = c.zhjwMaxAttempts ?? 3;
   $("f-zhjwRetryDelayMinutes").value = c.zhjwRetryDelayMinutes ?? 15;
   $("f-zhjwAccount").value = c.zhjwAccount || "";
-  $("f-zhjwPassword").value = c.zhjwPassword || "";
+  if (c.zhjwPasswordConfigured) {
+    $("f-zhjwPassword").value = "";
+    $("f-zhjwPassword").placeholder = "已保存（留空不改）";
+  } else {
+    $("f-zhjwPassword").value = c.zhjwPassword || "";
+    $("f-zhjwPassword").placeholder = "密码（仅本地保存）";
+  }
   $("f-zhjwMode").value = c.zhjwMode || "browser";
 
   const busy = !!state.running;
@@ -321,15 +335,17 @@ bind("btn-zhjw-http", async () => {
   refresh();
 });
 bind("btn-save-channel", async () => {
+  const patch = {
+    channel: $("f-channel").value,
+    zhjwMaxAttempts: Number($("f-zhjwMaxAttempts").value),
+    zhjwRetryDelayMinutes: Number($("f-zhjwRetryDelayMinutes").value),
+    zhjwAccount: $("f-zhjwAccount").value,
+    zhjwMode: $("f-zhjwMode").value,
+  };
+  const pw = $("f-zhjwPassword").value.trim();
+  if (pw !== "") patch.zhjwPassword = pw; // 只在用户输入了新密码时才发送，否则不改
   const r = await api("/api/config", {
-    patch: {
-      channel: $("f-channel").value,
-      zhjwMaxAttempts: Number($("f-zhjwMaxAttempts").value),
-      zhjwRetryDelayMinutes: Number($("f-zhjwRetryDelayMinutes").value),
-      zhjwAccount: $("f-zhjwAccount").value,
-      zhjwPassword: $("f-zhjwPassword").value,
-      zhjwMode: $("f-zhjwMode").value,
-    },
+    patch,
   });
   setStatus("st-channel", r.ok ? "✅ 已保存" : "❌ 保存失败", r.ok ? "ok" : "bad");
   refresh();
@@ -350,6 +366,11 @@ const autosaveChannelFields = () => {
 };
 $("f-channel").addEventListener("change", autosaveChannelFields);
 $("f-zhjwMode").addEventListener("change", autosaveChannelFields);
+$("btn-toggle-zhjwPassword").addEventListener("click", () => {
+  const inp = $("f-zhjwPassword");
+  inp.type = inp.type === "password" ? "text" : "password";
+  $("btn-toggle-zhjwPassword").textContent = inp.type === "password" ? "👁️" : "🙈";
+});
 bind("btn-token-refresh", async () => {
   setStatus("st-token", "正在操作微信窗口，请别动鼠标…", "warn");
   const r = await api("/api/token/refresh", {});
@@ -386,6 +407,7 @@ bind("btn-save-adv", async () => {
       readWeChatToken: $("f-readWeChatToken").checked,
       fillSuggestion: $("f-fillSuggestion").checked,
       suggestion: $("f-suggestion").value,
+      suggestionPool: $("f-suggestionPool").value,
     },
   });
   setStatus("st-adv", r.ok ? "✅ 已保存" : "❌ 保存失败", r.ok ? "ok" : "bad");
