@@ -9,6 +9,6 @@
     "eval": "node run-once.mjs"
   },
   "dependencies": {
-    "playwright-core": "*"
+    "playwright-core": "^1.64.1"
   }
 }
