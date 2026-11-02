@@ -254,8 +254,18 @@ const server = http.createServer(async (req, res) => {
 
   if (p === "/api/course" && req.method === "POST") {
     const body = await readBody(req);
-    const result = await runNodeScript("run-course.mjs", body.dryRun ? ["--dry-run"] : [], "course");
-    return json(res, 200, { ok: result.ok, data: result });
+    const config = readConfig();
+    const channel = String(config.channel || "wjiaowu");
+    const extra = body.dryRun ? ["--dry-run"] : [];
+    // 按当前渠道分派：zhjw 走浏览器 UI 点击版；wjiaowu/auto 走微信 Token 版
+    const isZhjw = channel === "zhjw";
+    const script = isZhjw ? "run-zhjw.mjs" : "run-course.mjs";
+    if (isZhjw) extra.push("--course");
+    const result = await runNodeScript(script, extra, "course");
+    return json(res, 200, {
+      ok: result.ok,
+      data: { ...result, source: isZhjw ? "zhjw" : channel === "auto" ? "auto(wjiaowu)" : channel },
+    });
   }
 
   if (p === "/api/zhjw/run" && req.method === "POST") {
@@ -263,6 +273,7 @@ const server = http.createServer(async (req, res) => {
     const extra = [];
     if (body.dryRun) extra.push("--dry-run");
     if (body.http === true) extra.push("--http");
+    if (body.keyboardMouse === true) extra.push("--keyboard-mouse");
     const result = await runNodeScript("run-zhjw.mjs", extra, "zhjw");
     return json(res, 200, { ok: result.ok, data: result });
   }

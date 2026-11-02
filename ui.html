@@ -133,8 +133,8 @@
   <div class="panel" id="p-course">
     <section>
       <h2>期末评课程（整学期一次）</h2>
-      <div class="hint">手动触发，评价本学期所有课程。同一时间只允许跑一个任务。</div>
-      <div class="row">
+      <div class="hint" id="st-course-hint">手动触发，评价本学期所有课程。同一时间只允许跑一个任务。</div>
+      <div class="row" id="course-action-row">
         <button class="primary" id="btn-course">立即执行评课程</button>
         <button class="ghost" id="btn-course-dry">试运行（不提交）</button>
       </div>
@@ -168,20 +168,22 @@
         </div>
       </div>
       <div class="row" style="margin-top:8px">
-        <label>登录方式</label><div style="flex:1">
+        <label>zhjw 登录方式</label><div style="flex:1">
           <select id="f-zhjwMode">
-            <option value="browser">浏览器键鼠模拟（推荐，真实指纹）</option>
-            <option value="http">纯 HTTP 请求（快，但指纹较弱）</option>
+            <option value="keyboard-mouse">全程键鼠模拟（推荐，真实点击）</option>
+            <option value="browser">浏览器键鼠登录 + 页面内 fetch 评课</option>
+            <option value="http">纯 HTTP 请求（不推荐，指纹弱）</option>
           </select>
         </div>
       </div>
-      <div class="row" style="margin-top:10px"><button class="primary" id="btn-save-channel">保存渠道配置</button></div>
       <div class="row" style="margin-top:8px">
-        <button class="primary" id="btn-zhjw-run">立即执行 zhjw 评课</button>
-        <button class="ghost" id="btn-zhjw-dry">试运行（不提交）</button>
-        <button class="ghost" id="btn-zhjw-http">纯 HTTP 模式试运行</button>
+        <label>课程评价页地址</label><div style="flex:1">
+          <input type="text" id="f-zhjwCourseUrl" placeholder="可留空自动探测；找不到入口时填入浏览器里评教页的完整地址" />
+        </div>
       </div>
+      <div class="row" style="margin-top:10px"><button class="primary" id="btn-save-channel">保存渠道配置</button></div>
       <div class="status" id="st-channel"></div>
+      <div class="hint" style="font-size:12;color:#999;margin-top:6px">执行入口已合并到顶部「操作」页的「立即执行 / 试运行」，按当前「评课途径」自动走 wjiaowu 或 zhjw。</div>
     </section>
   </div>
 
@@ -261,10 +263,17 @@ async function refresh() {
     $("f-zhjwPassword").value = c.zhjwPassword || "";
     $("f-zhjwPassword").placeholder = "密码（仅本地保存）";
   }
-  $("f-zhjwMode").value = c.zhjwMode || "browser";
+  $("f-zhjwMode").value = c.zhjwMode || (isZhjwChannel ? "keyboard-mouse" : "browser");
+  $("f-zhjwMode").parentElement.parentElement.style.display = isZhjwChannel ? "flex" : "none";
+  $("f-zhjwCourseUrl").value = c.zhjwCourseUrl || "";
+  // 期末评课程：wjiaowu 用微信版，zhjw 用浏览器键鼠版；channel 切换后两边都可点
+  if ($("course-action-row")) $("course-action-row").style.display = "flex";
+  if ($("st-course-hint")) $("st-course-hint").textContent = isZhjwChannel
+    ? "期末评课程：zhjw 渠道走浏览器 UI 点击（较慢、可试运行）；wjiaowu 渠道走微信 Token。同一时间只允许跑一个任务。"
+    : "手动触发，评价本学期所有课程。同一时间只允许跑一个任务。";
 
   const busy = !!state.running;
-  ["btn-run", "btn-run-dry", "btn-course", "btn-course-dry", "btn-token-refresh", "btn-token-scan", "btn-zhjw-run", "btn-zhjw-dry", "btn-zhjw-http"].forEach((id) => {
+  ["btn-run", "btn-run-dry", "btn-course", "btn-course-dry", "btn-token-refresh", "btn-token-scan"].forEach((id) => {
     $(id).disabled = busy;
   });
   if (busy) {
@@ -316,24 +325,7 @@ bind("btn-course-dry", async () => {
   setStatus("st-course", (r.ok ? "✅ " : "❌ ") + ((r.data && (r.data.output || r.data.error)) || ""), r.ok ? "ok" : "bad");
   refresh();
 });
-bind("btn-zhjw-run", async () => {
-  setStatus("st-channel", "zhjw 评课已开始，可能几分钟…", "warn");
-  const r = await api("/api/zhjw/run", { dryRun: false });
-  setStatus("st-channel", (r.ok ? "✅ " : "❌ ") + ((r.data && (r.data.message || r.data.error)) || ""), r.ok ? "ok" : "bad");
-  refresh();
-});
-bind("btn-zhjw-dry", async () => {
-  setStatus("st-channel", "zhjw 试运行中（浏览器键鼠模拟）…", "warn");
-  const r = await api("/api/zhjw/run", { dryRun: true });
-  setStatus("st-channel", (r.ok ? "✅ " : "❌ ") + ((r.data && (r.data.message || r.data.error)) || ""), r.ok ? "ok" : "bad");
-  refresh();
-});
-bind("btn-zhjw-http", async () => {
-  setStatus("st-channel", "zhjw 纯 HTTP 模式试运行中…", "warn");
-  const r = await api("/api/zhjw/run", { dryRun: true, http: true });
-  setStatus("st-channel", (r.ok ? "✅ " : "❌ ") + ((r.data && (r.data.message || r.data.error)) || ""), r.ok ? "ok" : "bad");
-  refresh();
-});
+
 bind("btn-save-channel", async () => {
   const patch = {
     channel: $("f-channel").value,
@@ -341,6 +333,7 @@ bind("btn-save-channel", async () => {
     zhjwRetryDelayMinutes: Number($("f-zhjwRetryDelayMinutes").value),
     zhjwAccount: $("f-zhjwAccount").value,
     zhjwMode: $("f-zhjwMode").value,
+    zhjwCourseUrl: $("f-zhjwCourseUrl").value.trim(),
   };
   const pw = $("f-zhjwPassword").value.trim();
   if (pw !== "") patch.zhjwPassword = pw; // 只在用户输入了新密码时才发送，否则不改
@@ -351,7 +344,19 @@ bind("btn-save-channel", async () => {
   refresh();
 });
 
-// 下拉列表选了就自动保存，不用点保存按钮
+// 下拉列表选了就自动保存，不用点保存按钮；同时做渠道与模式的联动显示
+function applyChannelLinkage() {
+  const ch = $("f-channel");
+  const mode = $("f-zhjwMode");
+  if (!ch || !mode) return;
+  const isZhjw = ch.value !== "wjiaowu";
+  const modeRow = mode.parentElement && mode.parentElement.parentElement;
+  if (modeRow) modeRow.style.display = isZhjw ? "flex" : "none";
+  if ($("course-action-row")) $("course-action-row").style.display = "flex";
+  if ($("st-course-hint")) $("st-course-hint").textContent = isZhjw
+    ? "期末评课程：zhjw 渠道走浏览器 UI 点击（较慢、可试运行）；wjiaowu 渠道走微信 Token。同一时间只允许跑一个任务。"
+    : "手动触发，评价本学期所有课程。同一时间只允许跑一个任务。";
+}
 const autosaveChannelFields = () => {
   const ch = $("f-channel");
   const mode = $("f-zhjwMode");
@@ -361,11 +366,17 @@ const autosaveChannelFields = () => {
   if (Object.keys(patch).length) {
     api("/api/config", { patch }).then((r) => {
       setStatus("st-channel", r.ok ? "✅ 已保存" : "❌ 保存失败", r.ok ? "ok" : "bad");
+      applyChannelLinkage();
     });
+  } else {
+    applyChannelLinkage();
   }
 };
 $("f-channel").addEventListener("change", autosaveChannelFields);
-$("f-zhjwMode").addEventListener("change", autosaveChannelFields);
+$("f-zhjwMode").addEventListener("change", () => {
+  applyChannelLinkage();
+  autosaveChannelFields();
+});
 $("btn-toggle-zhjwPassword").addEventListener("click", () => {
   const inp = $("f-zhjwPassword");
   inp.type = inp.type === "password" ? "text" : "password";
