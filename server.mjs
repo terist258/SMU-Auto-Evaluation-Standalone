@@ -247,7 +247,13 @@ const server = http.createServer(async (req, res) => {
     const script = isZhjw ? "run-zhjw.mjs" : "run-once.mjs";
     const extra = [];
     if (body.dryRun) extra.push("--dry-run");
-    if (isZhjw && body.http === true) extra.push("--http");
+    if (isZhjw) {
+      // 把当前 zhjw 模式显式传下去，避免脚本内部读 config.mode 造成模式错乱
+      const zm = String(config.zhjwMode || "browser");
+      if (zm === "keyboard-mouse") extra.push("--keyboard-mouse");
+      else if (zm === "http") extra.push("--http");
+      else extra.push("--browser");
+    }
     const result = await runNodeScript(script, extra, "eval");
     return json(res, 200, { ok: result.ok, data: { ...result, source: isZhjw ? "zhjw" : "wjiaowu" } });
   }

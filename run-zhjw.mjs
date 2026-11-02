@@ -117,16 +117,21 @@ async function main() {
 
   // 模式优先级：命令行 --http/--keyboard-mouse/--browser > 配置 zhjwMode（独立版）/ mode（插件版） > 默认 browser
   const modeValue = config.zhjwMode || config.mode || "browser";
-  const useHttp = wantHttpArg ? true : wantKeyboardMouseArg ? false : wantBrowserArg ? false : String(modeValue) === "http";
-  const useKeyboardMouse = wantKeyboardMouseArg ? true : !wantHttpArg && !wantBrowserArg && String(modeValue) === "keyboard-mouse";
+  const explicitMode = wantHttpArg ? "http" : wantKeyboardMouseArg ? "keyboard-mouse" : wantBrowserArg ? "browser" : "";
+  const useHttp = explicitMode ? explicitMode === "http" : String(modeValue) === "http";
+  const useKeyboardMouse = explicitMode ? explicitMode === "keyboard-mouse" : String(modeValue) === "keyboard-mouse";
   log("info", `开始 zhjw 评课（账号：${config.zhjwAccount}，试运行：${forceDryRun}，模式：${useHttp ? "纯 HTTP" : useKeyboardMouse ? "全程键鼠模拟" : "浏览器键鼠模拟"}）`);
+
+  // 把解析后的模式显式写进 client 配置，避免 client 内部再读 config.mode 造成模式错乱
+  const effectiveMode = useHttp ? "http" : useKeyboardMouse ? "keyboard-mouse" : "browser";
+  const clientConfig = { ...config, zhjwMode: effectiveMode };
 
   const ClientClass = useHttp ? ZhjwClient : ZhjwBrowserClient;
   const client = new ClientClass({
     account: config.zhjwAccount,
     password: config.zhjwPassword,
     log: log,
-    config: config,
+    config: clientConfig,
   });
 
   try {
