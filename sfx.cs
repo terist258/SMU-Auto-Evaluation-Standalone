@@ -19,7 +19,7 @@ using System.Windows.Forms;
 internal static class Sfx
 {
     private const string ResourceName = "payload.zip";
-    private const string VersionStamp = "2026-11-02-v3";
+    private const string VersionStamp = "2026-11-03-v8";
 
     [STAThread]
     private static int Main(string[] args)
@@ -68,7 +68,7 @@ internal static class Sfx
                         }
                     }
 
-                    ZipFile.ExtractToDirectory(tempZip, extractDir);
+                    ExtractZipRobust(tempZip, extractDir);
                     File.WriteAllText(stampFile, VersionStamp);
                 }
                 finally
@@ -96,6 +96,40 @@ internal static class Sfx
         {
             ShowError("启动失败：\r\n" + ex.Message);
             return 1;
+        }
+    }
+
+    private static void ExtractZipRobust(string zipPath, string extractDir)
+    {
+        // 逐条解压：兼容 zip 条目使用反斜杠路径（旧版 CreateFromDirectory 会生成 node_modules\... 形式，
+        // 直接用 ZipFile.ExtractToDirectory 会把整串当作文件名，导致子目录漏解压）。
+        using (var archive = ZipFile.OpenRead(zipPath))
+        {
+            string baseDirFull = Path.GetFullPath(extractDir);
+            if (!baseDirFull.EndsWith(Path.DirectorySeparatorChar.ToString()))
+                baseDirFull += Path.DirectorySeparatorChar;
+
+            foreach (var entry in archive.Entries)
+            {
+                // 目录条目（以 / 或 \ 结尾且无文件名）跳过，目录会在写文件时自动创建
+                if (string.IsNullOrEmpty(entry.Name)) continue;
+
+                string rel = entry.FullName.Replace('\\', '/').Replace('/', Path.DirectorySeparatorChar);
+                // 防目录穿越
+                if (rel.Contains("..")) continue;
+                string destPath = Path.GetFullPath(Path.Combine(baseDirFull, rel));
+                if (!destPath.StartsWith(baseDirFull, StringComparison.OrdinalIgnoreCase)) continue;
+
+                string destDir = Path.GetDirectoryName(destPath);
+                if (!string.IsNullOrEmpty(destDir) && !Directory.Exists(destDir))
+                    Directory.CreateDirectory(destDir);
+
+                using (var es = entry.Open())
+                using (var fs = File.Create(destPath))
+                {
+                    es.CopyTo(fs);
+                }
+            }
         }
     }
 
