@@ -19,7 +19,7 @@ using System.Windows.Forms;
 internal static class Sfx
 {
     private const string ResourceName = "payload.zip";
-    private const string VersionStamp = "2026-11-03-v8";
+    private const string VersionStamp = "2026-11-04-v9";
 
     [STAThread]
     private static int Main(string[] args)
