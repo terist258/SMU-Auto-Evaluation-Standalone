@@ -46,6 +46,8 @@ async function sleepJitter(minutes) {
 }
 
 async function main() {
+  const startedAtAll = Date.now();
+  log("info", `=== 开始运行（${new Date().toISOString()}）===`);
   const config = readConfig();
 
   if (wantCheck) {
@@ -141,6 +143,7 @@ async function main() {
     });
 
     log(result.ok ? "info" : "error", result.message);
+    log("info", `=== 运行结束，总耗时 ${((Date.now() - startedAtAll) / 1000).toFixed(1)} 秒 ===`);
 
     if (!result.ok) {
       return 1;

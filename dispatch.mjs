@@ -21,13 +21,22 @@ const extraArgs = process.argv.slice(2);
 
 function run(script) {
   return new Promise((resolve) => {
+    console.log(`[dispatch] 子脚本启动：${script}`);
+    const startedAt = Date.now();
     const child = spawn(NODE, [path.join(HERE, script), ...extraArgs], {
       cwd: HERE,
       stdio: "inherit",
       windowsHide: true,
     });
-    child.on("error", () => resolve(1));
-    child.on("exit", (code) => resolve(code === null ? 1 : code));
+    child.on("error", (err) => {
+      console.log(`[dispatch] 子脚本 ${script} 启动失败：${err && err.message ? err.message : err}`);
+      resolve(1);
+    });
+    child.on("exit", (code) => {
+      const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
+      console.log(`[dispatch] 子脚本结束：${script}，退出码 ${code}，耗时 ${elapsed} 秒`);
+      resolve(code === null ? 1 : code);
+    });
   });
 }
 

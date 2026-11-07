@@ -150,6 +150,8 @@ function persistToken(token) {
 }
 
 async function main() {
+  const startedAtAll = Date.now();
+  log("info", `=== 开始运行（${new Date().toISOString()}）===`);
   const config = readConfig();
 
   if (wantCheck) {
@@ -215,6 +217,7 @@ async function main() {
   };
   writeResult(result);
   log(result.ok ? "info" : "error", `${result.ok ? "✅" : "❌"} ${result.message || "（无说明）"}`);
+  log("info", `=== 运行结束，总耗时 ${((Date.now() - startedAtAll) / 1000).toFixed(1)} 秒 ===`);
   if (!result.ok) notify("南医大评课助手 · 评课失败", result.message || "未知原因", "error");
   return result.ok ? 0 : 1;
 }
