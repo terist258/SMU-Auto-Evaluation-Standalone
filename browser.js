@@ -902,10 +902,38 @@ export async function runBrowserRun(config, log) {
             await page.locator(".van-rate").first().waitFor({ state: "hidden", timeout: 20000 });
           } catch {}
 
+          // ★ eval 复查：不信"点了提交没报错"，回「未评价」列表确认这门课真的消失了。
+          // 这正是踩过的"假成功"坑：系统接受了提交、没抛错，但这门课其实还在未评价列表里。
+          // 只有确认它已不在未评价列表，才记为真正成功。
+          let verified = false;
+          try {
+            // 给服务端一点时间把状态落库，再重新扫描
+            await sleep(rand(1500, 3000));
+            const stillPending = await scanPending(page);
+            const stillThere = stillPending.some(
+              (item) => item.text.replace(/评价\s*$/, "").trim() === name
+            );
+            verified = !stillThere;
+            if (!verified) {
+              log("warn", `    ⚠️ ${name} 提交后仍出现在「未评价」列表，判定为未真正成功`);
+            }
+          } catch (verifyErr) {
+            // 复查本身失败时不武断判成功，保守记为未确认，避免假阳性
+            log("warn", `    复查 ${name} 状态失败：${verifyErr.message}（保守记为未确认）`);
+            verified = false;
+          }
+
+          if (!verified) {
+            // 复查不通过：不计数为 ok，记为 unverified，并抛出以走失败分支的收尾
+            details.push({ name, date: dstr, status: "unverified", error: "提交后仍在未评价列表" });
+            done += 1;
+            throw new Error("提交后复查未通过（仍在未评价列表）");
+          }
+
           evaluated += 1;
           done += 1;
-          details.push({ name, date: dstr, status: "ok" });
-          log("info", `    ✅ ${name} 已提交`);
+          details.push({ name, date: dstr, status: "ok", verified: true });
+          log("info", `    ✅ ${name} 已提交并复查通过`);
 
           const back = page.locator(".van-nav-bar__left").first();
           if ((await back.count()) > 0 && (await back.isVisible().catch(() => false))) {
@@ -937,15 +965,18 @@ export async function runBrowserRun(config, log) {
     }
 
     const okAll = details.every((d) => d.status === "ok" || d.status === "dry-run");
+    const passCount = details.filter((d) => d.status === "ok" || d.status === "dry-run").length;
+    const passRate = details.length === 0 ? 1 : passCount / details.length;
     return {
       ok: details.length === 0 ? true : okAll,
       evaluated,
       pending: details.length,
+      passRate,
       tokenInvalid: false,
       message:
         details.length === 0
           ? "没有可评的课节"
-          : `浏览器评课完成：成功 ${evaluated} 条，共处理 ${details.length} 条`,
+          : `浏览器评课完成：成功 ${evaluated} 条，共处理 ${details.length} 条（pass_rate=${passRate.toFixed(2)}）`,
       details,
     };
   } catch (err) {
